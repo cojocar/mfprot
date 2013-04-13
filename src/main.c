@@ -238,7 +238,7 @@ recv_byte(mfprot_device dev, uint8_t *byte_out)
 	byte = 0;
 	for (bits = 0; bits < 9; ++bits) {
 		uint8_t b = 0;
-#define TIMES_PER_BIT 4
+#define TIMES_PER_BIT 8
 		for (t = 0; t < TIMES_PER_BIT;) {
 			struct timespec cur;
 			uint8_t b_tmp = 0;
@@ -260,7 +260,7 @@ recv_byte(mfprot_device dev, uint8_t *byte_out)
 				//printf(":%d", b_tmp);
 			}
 		}
-		if (bits == 0)
+		if (bits == 0 || bits == 9)
 			continue;
 		if (b >= TIMES_PER_BIT/2) {
 			byte |= 1 << (bits-1);
@@ -308,6 +308,19 @@ mfprot_get_uid(mfprot_device dev, uint8_t id[7])
 
 	memcpy(id, &buf[1], 7);
 	return flag;
+}
+
+uint8_t
+mfprot_display_firmware_desc(mfprot_device dev, FILE *f)
+{
+	char c;
+	send_data(dev, "z", 1);
+
+	do {
+		recv_byte(dev, &c);
+		fprintf(stdout, "%c", c);
+	} while (c);
+	fprintf(stdout, "\n");
 }
 
 void

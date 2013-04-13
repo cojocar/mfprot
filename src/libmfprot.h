@@ -13,6 +13,8 @@ void mfprot_display_status(FILE *f, uint8_t status);
 uint8_t mfprot_get_uid(mfprot_device dev, uint8_t id[7]);
 void mfprot_display_uid(FILE *f, uint8_t id[7]);
 
+uint8_t mfprot_display_firmware_desc(mfprot_device dev, FILE *f);
+
 #if defined NDEBUG
 #define dprintf(format, ...)
 #else

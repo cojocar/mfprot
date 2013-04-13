@@ -15,5 +15,7 @@ main(int argc, char *argv[])
 	mfprot_get_uid(d, id);
 	mfprot_display_uid(stdout, id);
 
+	mfprot_display_firmware_desc(d, stdout);
+
 	mfprot_release_device(d);
 }
