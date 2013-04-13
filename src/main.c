@@ -8,6 +8,7 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "libmfprot.h"
 
@@ -162,6 +163,22 @@ err_open:
 }
 
 void
+mfprot_display_block(FILE *f, uint8_t data[16])
+{
+	int i, j;
+
+	for (j = 0; j < 2; ++j) {
+		for (i = 0; i < 8; ++i) {
+			fprintf(f, "%02x ", data[8*j+i]);
+		}
+		for (i = 0; i < 8; ++i) {
+			fprintf(f, "%c", isprint(data[8*j+i]) ? data[8*j+i] : '.');
+		}
+		fprintf(f, "\n");
+	}
+}
+
+void
 mfprot_display_status(FILE *f, uint8_t status)
 {
 	int i;
@@ -195,8 +212,8 @@ send_data(mfprot_device dev, char *buf, int len)
 {
 	int w;
 	while (get_cts())
-		usleep(100000);
-	printf("CTS_0->%d\n", get_cts());
+		usleep(2);
+	//printf("CTS_0->%d\n", get_cts());
 	if (len != (w = write(dev, buf, len))) {
 		perror("write");
 		return w;
@@ -292,6 +309,33 @@ mfprot_get_status(mfprot_device dev)
 }
 
 uint8_t
+mfprot_read_card_block(mfprot_device dev,
+		uint8_t block_addr, uint8_t key_type,
+		uint8_t key_code, uint8_t data[16])
+{
+	uint8_t flag;
+	uint8_t arg2 = (key_type << 7) | key_code;
+	int i;
+
+	send_data(dev, "R", 1);
+	send_data(dev, &block_addr, 1);
+	send_data(dev, &arg2, 1);
+	//tcdrain(dev);
+
+	recv_byte(dev, &flag);
+
+	if (flag & S_CARD_OK) {
+		recv_data(dev, &data[0], 16);
+	} else {
+		memset(data, 0xff, 16);
+	}
+
+	dprintf("got status: %02x", flag);
+	return flag;
+}
+
+
+uint8_t
 mfprot_get_uid(mfprot_device dev, uint8_t id[7])
 {
 	uint8_t flag;
@@ -318,10 +362,30 @@ mfprot_display_firmware_desc(mfprot_device dev, FILE *f)
 
 	do {
 		recv_byte(dev, &c);
-		fprintf(stdout, "%c", c);
+		fprintf(f, "%c", c);
 	} while (c);
-	fprintf(stdout, "\n");
+	fprintf(f, "\n");
 }
+
+uint8_t
+mfprot_set_key(mfprot_device dev,
+		uint8_t key_code, uint8_t key[6])
+{
+	int i;
+	uint8_t flag;
+	send_data(dev, "K", 1);
+
+	send_data(dev, &key_code, 1);
+	for (i = 0; i < 6; ++i) {
+		send_data(dev, &key[i], 1);
+	}
+
+	recv_byte(dev, &flag);
+	dprintf("got status: %02x", flag);
+
+	return flag;
+}
+
 
 void
 mfprot_display_uid(FILE *f, uint8_t id[7])
