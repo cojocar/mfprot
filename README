@@ -1,0 +1,10 @@
+== Mifare communication protocol ==
+
+This is an implementation of the MFPROT used to communicate with Micro RWD MF
+(Mifare) Reader.
+
+The description of the protocol is here[1], one such device is the
+RWD-MIFARE-OEM[2].
+
+[1]rfidtoys.net/downloads/MifareProtocol.pdf
+[2]http://uk.farnell.com/rf-solutions/rwd-mifare-oem/mod-mifare-rfid-receiver-antenna/dp/1655512
