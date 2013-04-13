@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <sys/mman.h>
 #include <time.h>
+#include <string.h>
 
 #include "libmfprot.h"
 
@@ -184,8 +185,8 @@ mfprot_display_status(FILE *f, uint8_t status)
 		return;
 	}
 
-	for (i = 0, m = S_ONE; m; m >> 1, i++) {
-		fprintf(f, "%1x: %s\n", (m == (status & m)), status_flag[i].msg);
+	for (i = 0, m = S_ONE; m; m >>= 1, i++) {
+		fprintf(f, "%1x: %s\n", (m == (status & m)), status_flag[7-i].msg);
 	}
 }
 
@@ -209,7 +210,7 @@ recv_data(mfprot_device dev, char *buf, int len)
 	int i;
 
 	dprintf("receinving %d bytes\n", len);
-	/* TODO: track buffer */
+	/* TODO: track local_bufer */
 	for (i = 0; i < len; ++i) {
 		if (read(dev, &buf[i], 1) < 0) {
 			perror("read");
@@ -224,13 +225,13 @@ recv_data(mfprot_device dev, char *buf, int len)
 #define sec (1000ul*msec)
 
 static int
-recv_data_alt(mfprot_device dev, char *buf, int len)
+recv_data_alt(mfprot_device dev, void *buf, int len)
 {
 	int i, j, k, t;
 	int bits;
 	uint16_t byte;
 	struct timespec last;
-	char buff[1024];
+	char local_buf[1024];
 
 	/* wait for start bit */
 	while (1) {
@@ -266,10 +267,6 @@ recv_data_alt(mfprot_device dev, char *buf, int len)
 					//printf(":%d", b_tmp);
 				}
 			}
-			//if (i == 0 && bits == 0) {
-			//	/* skip start bit */
-			//	continue;
-			//}
 			if (b >= TIMES_PER_BIT/2) {
 				byte |= 1 << (bits);
 				//printf("%d", 1);
@@ -278,56 +275,58 @@ recv_data_alt(mfprot_device dev, char *buf, int len)
 			}
 			//printf("%d", b);
 		}
-		printf("%02x", byte);
-		buff[i] = byte;
+		//printf("%02x", byte);
+		local_buf[i] = byte;
 	}
 
 	for (i = 0; i < len; ++i) {
-		printf("\n%02x", (buff[i] >> 1) | ((buff[i+1] & 0x01) << 7));
+		printf("%02x", (local_buf[i] >> 1) | ((local_buf[i+1] & 0x01) << 7));
+		local_buf[i] = (local_buf[i] >> 1) | ((local_buf[i+1] & 0x01) << 7);
 	}
-	/*
-	for (i = 0; i < len; ++i) {
-		byte = 0;
-		for (bits = 0; bits < 8; ++bits) {
-			uint8_t b = get_rx();
-			printf("%d", b);
-			for (j = 0; j < 195; ++j) {
-				for (k = 0; k < 40; ++k)
-					;
-			}
-			byte |= b << bits;
-		}
-		printf("->%02x", byte);
-	}
-	*/
+	printf("\n");
+
+	memcpy(buf, local_buf, len);
 }
 
-uint8_t mfprot_get_status(mfprot_device dev)
+uint8_t
+mfprot_get_status(mfprot_device dev)
 {
 	uint8_t flag;
-	int x;
-	int y;
-	int j, k;
 
-	y = 1;
-	while (y--) {
-		x = 1;
-		while (x--) {
-			send_data(dev, "S", 1);
-			tcdrain(dev);
-			printf("CTS_1->%d\n", get_cts());
+	send_data(dev, "S", 1);
+	tcdrain(dev);
+	recv_data_alt(dev, &flag, 1);
 
-			//dprintf("drain ret: %d", tcdrain(dev));
-			//usleep(80000);
-			//tcflush(dev, TCIOFLUSH);
-			recv_data_alt(dev, &flag, 16);
-			printf("\n");
-		}
-
-		dprintf("got status: %02x", flag);
-	}
+	dprintf("got status: %02x", flag);
 
 	return flag;
+}
+
+uint8_t
+mfprot_get_uid(mfprot_device dev, uint8_t id[7])
+{
+	uint8_t flag;
+	uint8_t buf[8];
+
+	send_data(dev, "U", 1);
+	tcdrain(dev);
+	recv_data_alt(dev, &buf[0], 8);
+
+	flag = buf[0];
+
+	dprintf("got status: %02x", flag);
+
+	memcpy(id, &buf[1], 7);
+	return flag;
+}
+
+void
+mfprot_display_uid(FILE *f, uint8_t id[7])
+{
+	fprintf(f, "UID=%02x%02x%02x%02x"
+			"%02x%02x%02x%02x\n",
+			id[0], id[1], id[2], id[3],
+			id[4], id[5], id[6]);
 }
 
 void
