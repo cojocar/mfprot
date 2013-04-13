@@ -15,11 +15,22 @@ void mfprot_display_uid(FILE *f, uint8_t id[7]);
 
 uint8_t mfprot_display_firmware_desc(mfprot_device dev, FILE *f);
 
+uint8_t
+mfprot_read_card_block(mfprot_device dev,
+		uint8_t block_addr, uint8_t key_type,
+		uint8_t key_code, uint8_t data[16]);
+
+uint8_t
+mfprot_set_key(mfprot_device dev,
+		uint8_t key_code, uint8_t key[6]);
+void
+mfprot_display_block(FILE *f, uint8_t data[16]);
+
 #if defined NDEBUG
 #define dprintf(format, ...)
 #else
 #define dprintf(format, ...) \
-	printf("%s::%s:%d\t" format "\n",\
+	fprintf(stderr, "%s::%s:%d\t" format "\n",\
 			__FILE__, __FUNCTION__,  __LINE__, __VA_ARGS__ )
 #endif
 
