@@ -231,7 +231,7 @@ recv_data_alt(mfprot_device dev, void *buf, int len)
 	int bits;
 	uint16_t byte;
 	struct timespec last;
-	char local_buf[1024];
+	char local_buf[1];
 
 	/* wait for start bit */
 	while (1) {
@@ -241,9 +241,9 @@ recv_data_alt(mfprot_device dev, void *buf, int len)
 		}
 	}
 
-	for (i = 0; i < len+1; ++i) {
+	for (i = 0; i < len; ++i) {
 		byte = 0;
-		for (bits = 0; bits < 8; ++bits) {
+		for (bits = 0; bits < 9; ++bits) {
 			uint8_t b = 0;
 #define TIMES_PER_BIT 4
 			for (t = 0; t < TIMES_PER_BIT;) {
@@ -267,8 +267,10 @@ recv_data_alt(mfprot_device dev, void *buf, int len)
 					//printf(":%d", b_tmp);
 				}
 			}
+			if (bits == 0)
+				continue;
 			if (b >= TIMES_PER_BIT/2) {
-				byte |= 1 << (bits);
+				byte |= 1 << (bits-1);
 				//printf("%d", 1);
 			} else {
 				//printf("%d", 0);
@@ -280,12 +282,15 @@ recv_data_alt(mfprot_device dev, void *buf, int len)
 	}
 
 	for (i = 0; i < len; ++i) {
-		printf("%02x", (local_buf[i] >> 1) | ((local_buf[i+1] & 0x01) << 7));
-		local_buf[i] = (local_buf[i] >> 1) | ((local_buf[i+1] & 0x01) << 7);
+		//printf("%02x", local_buf[i]);
 	}
-	printf("\n");
+	//printf("\n");
 
 	memcpy(buf, local_buf, len);
+
+	/* wait for stop bits */
+	while (get_rx() == 0)
+		;
 }
 
 uint8_t
@@ -310,7 +315,16 @@ mfprot_get_uid(mfprot_device dev, uint8_t id[7])
 
 	send_data(dev, "U", 1);
 	tcdrain(dev);
-	recv_data_alt(dev, &buf[0], 8);
+
+	recv_data_alt(dev, &buf[0], 1);
+	recv_data_alt(dev, &buf[1], 1);
+	recv_data_alt(dev, &buf[2], 1);
+	recv_data_alt(dev, &buf[3], 1);
+	recv_data_alt(dev, &buf[4], 1);
+	recv_data_alt(dev, &buf[5], 1);
+	recv_data_alt(dev, &buf[6], 1);
+	recv_data_alt(dev, &buf[7], 1);
+	//recv_data_alt(dev, &buf[7], 1);
 
 	flag = buf[0];
 
@@ -324,7 +338,7 @@ void
 mfprot_display_uid(FILE *f, uint8_t id[7])
 {
 	fprintf(f, "UID=%02x%02x%02x%02x"
-			"%02x%02x%02x%02x\n",
+			"%02x%02x%02x\n",
 			id[0], id[1], id[2], id[3],
 			id[4], id[5], id[6]);
 }
