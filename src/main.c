@@ -204,34 +204,28 @@ send_data(mfprot_device dev, char *buf, int len)
 	return len;
 }
 
-static int
-recv_data(mfprot_device dev, char *buf, int len)
-{
-	int i;
-
-	dprintf("receinving %d bytes\n", len);
-	/* TODO: track local_bufer */
-	for (i = 0; i < len; ++i) {
-		if (read(dev, &buf[i], 1) < 0) {
-			perror("read");
-			return i;
-		}
-	}
-	return len;
-}
-
 #define usec (1000ul)
 #define msec (1000ul*usec)
 #define sec (1000ul*msec)
 
+static int recv_byte(mfprot_device dev, uint8_t *byte_out);
+
 static int
-recv_data_alt(mfprot_device dev, void *buf, int len)
+recv_data(mfprot_device dev, void *ptr, int len)
 {
-	int i, j, k, t;
+	int i;
+	for (i = 0; i < len; ++i) {
+		recv_byte(dev, ((char *)ptr)+i);
+	}
+}
+
+static int
+recv_byte(mfprot_device dev, uint8_t *byte_out)
+{
+	int j, k, t;
 	int bits;
 	uint16_t byte;
 	struct timespec last;
-	char local_buf[1];
 
 	/* wait for start bit */
 	while (1) {
@@ -241,52 +235,42 @@ recv_data_alt(mfprot_device dev, void *buf, int len)
 		}
 	}
 
-	for (i = 0; i < len; ++i) {
-		byte = 0;
-		for (bits = 0; bits < 9; ++bits) {
-			uint8_t b = 0;
+	byte = 0;
+	for (bits = 0; bits < 9; ++bits) {
+		uint8_t b = 0;
 #define TIMES_PER_BIT 4
-			for (t = 0; t < TIMES_PER_BIT;) {
-				struct timespec cur;
-				uint8_t b_tmp = 0;
-				unsigned long delay;
+		for (t = 0; t < TIMES_PER_BIT;) {
+			struct timespec cur;
+			uint8_t b_tmp = 0;
+			unsigned long delay;
 
-				clock_gettime(CLOCK_MONOTONIC, &cur);
-				b_tmp = get_rx();
+			clock_gettime(CLOCK_MONOTONIC, &cur);
+			b_tmp = get_rx();
 
-				if (cur.tv_sec > last.tv_sec) {
-					delay = cur.tv_nsec + (sec - last.tv_nsec);
-				} else if (cur.tv_sec == last.tv_sec) {
-					delay = cur.tv_nsec - last.tv_nsec;
-				} else {
-					printf("XXX\n");
-				}
-				if (delay >= (104/TIMES_PER_BIT)*((i*8*TIMES_PER_BIT)+(bits*TIMES_PER_BIT)+t)*usec) {
-					b += b_tmp;
-					++t;
-					//printf(":%d", b_tmp);
-				}
-			}
-			if (bits == 0)
-				continue;
-			if (b >= TIMES_PER_BIT/2) {
-				byte |= 1 << (bits-1);
-				//printf("%d", 1);
+			if (cur.tv_sec > last.tv_sec) {
+				delay = cur.tv_nsec + (sec - last.tv_nsec);
+			} else if (cur.tv_sec == last.tv_sec) {
+				delay = cur.tv_nsec - last.tv_nsec;
 			} else {
-				//printf("%d", 0);
+				printf("XXX\n");
 			}
-			//printf("%d", b);
+			if (delay >= (104/TIMES_PER_BIT)*((bits*TIMES_PER_BIT)+t)*usec) {
+				b += b_tmp;
+				++t;
+				//printf(":%d", b_tmp);
+			}
 		}
-		//printf("%02x", byte);
-		local_buf[i] = byte;
+		if (bits == 0)
+			continue;
+		if (b >= TIMES_PER_BIT/2) {
+			byte |= 1 << (bits-1);
+			//printf("%d", 1);
+		} else {
+			//printf("%d", 0);
+		}
 	}
 
-	for (i = 0; i < len; ++i) {
-		//printf("%02x", local_buf[i]);
-	}
-	//printf("\n");
-
-	memcpy(buf, local_buf, len);
+	*byte_out = byte;
 
 	/* wait for stop bits */
 	while (get_rx() == 0)
@@ -300,7 +284,7 @@ mfprot_get_status(mfprot_device dev)
 
 	send_data(dev, "S", 1);
 	tcdrain(dev);
-	recv_data_alt(dev, &flag, 1);
+	recv_data(dev, &flag, 1);
 
 	dprintf("got status: %02x", flag);
 
@@ -316,15 +300,7 @@ mfprot_get_uid(mfprot_device dev, uint8_t id[7])
 	send_data(dev, "U", 1);
 	tcdrain(dev);
 
-	recv_data_alt(dev, &buf[0], 1);
-	recv_data_alt(dev, &buf[1], 1);
-	recv_data_alt(dev, &buf[2], 1);
-	recv_data_alt(dev, &buf[3], 1);
-	recv_data_alt(dev, &buf[4], 1);
-	recv_data_alt(dev, &buf[5], 1);
-	recv_data_alt(dev, &buf[6], 1);
-	recv_data_alt(dev, &buf[7], 1);
-	//recv_data_alt(dev, &buf[7], 1);
+	recv_data(dev, &buf[0], 8);
 
 	flag = buf[0];
 
